@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve script-relative paths (templates/) by their absolute location, not by
+# cwd -- callers (e.g. main_cli.sh --output_dir) may run this from a different
+# directory than the repo root.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATES_DIR="${SCRIPT_DIR}/templates"
+
+# Brainlife apps generally run from the repo root.
+# Inputs are mounted under ./input and outputs go to ./output.
+mkdir -p output work
+
+# Singularity here only shares a limited default set of host paths (e.g.
+# $HOME) with the container -- anything on a separately-mounted filesystem
+# (a second sshfs mount, a different disk, etc.) is otherwise invisible
+# inside the container. EXTRA_BINDS collects --bind flags for the mount
+# point of every path we actually reference, so the container can see them
+# regardless of where they live on the host.
+EXTRA_BINDS=()
+declare -A _BIND_SEEN=()
+
+add_bind_for() {
+  local target="$1"
+  [[ -n "${target}" ]] || return 0
+  local resolved mount_point
+  resolved="$(readlink -f "${target}" 2>/dev/null || echo "${target}")"
+  mount_point="$(df --output=target -- "${resolved}" 2>/dev/null | tail -n1 | xargs || true)"
+  [[ -n "${mount_point}" && "${mount_point}" != "/" ]] || return 0
+  if [[ -z "${_BIND_SEEN[${mount_point}]:-}" ]]; then
+    _BIND_SEEN["${mount_point}"]=1
+    EXTRA_BINDS+=(--bind "${mount_point}:${mount_point}")
+  fi
+}
+
+# Helper to run inside the deepRetinotopy container.
+#
+# Set NO_CONTAINER=1 to skip Singularity entirely and run "$@" directly
+# (deepRetinotopy already on PATH from a native install), useful for
+# development on a machine that has the toolbox installed locally.
+#
+# Otherwise: Singularity's own startup fails with "Failed to open current
+# working directory: Permission denied" whenever the *invoking shell's* cwd
+# is on a FUSE mount (e.g. sshfs) -- no singularity flag prevents this,
+# since it happens before the container even starts. The fix is to invoke
+# singularity itself from a safe, local cwd (cd / in a subshell) and tell it
+# where the real working directory should be via --pwd, combined with
+# EXTRA_BINDS so that directory (and anything else we reference) is
+# actually visible inside the container.
+run_in_env() {
+  if [[ "${NO_CONTAINER:-0}" == "1" ]]; then
+    "$@"
+    return
+  fi
+
+  local -a nv_flag=()
+  [[ "${USE_GPU:-0}" == "1" ]] && nv_flag=(--nv)
+
+  local host_pwd
+  host_pwd="$(pwd)"
+  (
+    cd /
+    singularity exec -e "${nv_flag[@]}" --pwd "${host_pwd}" "${EXTRA_BINDS[@]}" \
+      "docker://vnmd/deepretinotopy_${CONTAINER_VERSION}" \
+      "$@"
+  )
+}
+
+# Read config.json (Brainlife auto-generates this at runtime)
+CONFIG=${CONFIG:-config.json}
+
+if [[ ! -f "${CONFIG}" ]]; then
+  echo "ERROR: config.json not found at ${CONFIG}"
+  exit 1
+fi
+
+FSDIR=$(jq -r '.freesurfer // empty' "${CONFIG}")
+if [[ -z "${FSDIR}" ]]; then
+  echo "ERROR: 'freesurfer' field not found in ${CONFIG}"
+  exit 1
+fi
+if [[ ! -d "${FSDIR}/surf" ]]; then
+  echo "ERROR: '${FSDIR}/surf' not found -- 'freesurfer' must point at a single subject's FreeSurfer output directory"
+  exit 1
+fi
+
+MAPS=$(jq -r '.maps // "polarAngle,eccentricity,pRFsize"' "${CONFIG}")
+FAST=$(jq -r '.fast // "yes"' "${CONFIG}")
+DATASET=$(jq -r '.dataset // "brainlife"' "${CONFIG}")
+SUBJECT_ID=$(jq -r '.subject_id // "subject"' "${CONFIG}")
+USE_GPU=$(jq -r 'if .use_gpu then "1" else "0" end' "${CONFIG}")
+export USE_GPU
+
+# vnmd/deepretinotopy_1.0.19 currently fails to build via Singularity/Apptainer
+# in unprivileged mode (corrupted/broken layer upstream on Docker Hub as of
+# 2026-07-24: extraction fails unpacking a hardlinked file from a conda
+# package). 1.0.18 is confirmed working, so it's the default here; override
+# via config.json's "container_version" (or CONTAINER_VERSION env var) once
+# 1.0.19 is fixed upstream, or to pin a different release.
+CONFIG_CONTAINER_VERSION=$(jq -r '.container_version // empty' "${CONFIG}")
+CONTAINER_VERSION="${CONFIG_CONTAINER_VERSION:-${CONTAINER_VERSION:-1.0.18}}"
+
+# deepRetinotopy expects "-s" to be a directory *of subjects*
+# (<subjects_dir>/<subject_id>/surf/...), so stage the single Brainlife
+# "freesurfer" input under a synthetic subject_id via symlink.
+SUBJECTS_DIR="$(pwd)/work/subjects"
+mkdir -p "${SUBJECTS_DIR}"
+ln -sfn "$(readlink -f "${FSDIR}")" "${SUBJECTS_DIR}/${SUBJECT_ID}"
+
+for BIND_TARGET in "$(pwd)" "${FSDIR}" "${TEMPLATES_DIR}"; do
+  add_bind_for "${BIND_TARGET}"
+done
+
+CMD=(deepRetinotopy
+  -s "${SUBJECTS_DIR}"
+  -t "${TEMPLATES_DIR}"
+  -d "${DATASET}"
+  -m "${MAPS}"
+  -g "${FAST}"
+  -i "${SUBJECT_ID}"
+  -o "$(pwd)/output"
+)
+
+echo "Running command:"
+printf '  %q' "${CMD[@]}"
+echo
+run_in_env "${CMD[@]}"
+
+# ---------------------------------------------------------------------------
+# Flatten native-space predictions into a prf_surfaces/ folder with naming
+# consistent with this ecosystem's other retinotopy apps (rfWidth instead of
+# pRFsize), for easy reuse by downstream apps such as
+# app-retinotopic-connectivity.
+# ---------------------------------------------------------------------------
+mkdir -p prf_surfaces
+DEEPRET_OUT="output/${SUBJECT_ID}/deepRetinotopy"
+if [[ -d "${DEEPRET_OUT}" ]]; then
+  for hemisphere in lh rh; do
+    for pair in "polarAngle:polarAngle" "eccentricity:eccentricity" "pRFsize:rfWidth"; do
+      src_map="${pair%%:*}"
+      dst_map="${pair##*:}"
+      src="${DEEPRET_OUT}/${SUBJECT_ID}.predicted_${src_map}_model.${hemisphere}.native.func.gii"
+      [[ -f "${src}" ]] && cp "${src}" "prf_surfaces/${hemisphere}.${dst_map}.native.func.gii"
+    done
+  done
+fi
+
+# ---------------------------------------------------------------------------
+# Generate product.json for brainlife
+# ---------------------------------------------------------------------------
+echo "Generating product.json ..."
+jq -n --arg dataset "${DATASET}" --arg maps "${MAPS}" \
+  '{"brainlife": [{"type": "info", "msg": ("deepRetinotopy predicted maps: " + $maps + " (dataset: " + $dataset + ")")}]}' \
+  > product.json
+
+echo "Done. Outputs in ./output and ./prf_surfaces"

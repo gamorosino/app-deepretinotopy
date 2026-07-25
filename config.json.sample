@@ -1,0 +1,9 @@
+{
+  "freesurfer": "testdata/freesurfer/output",
+  "maps": "polarAngle,eccentricity,pRFsize",
+  "dataset": "brainlife",
+  "subject_id": "subject",
+  "fast": "yes",
+  "use_gpu": false,
+  "container_version": "1.0.18"
+}
