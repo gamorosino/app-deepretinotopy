@@ -91,12 +91,16 @@ SUBJECT_ID=$(jq -r '.subject_id // "subject"' "${CONFIG}")
 USE_GPU=$(jq -r 'if .use_gpu then "1" else "0" end' "${CONFIG}")
 export USE_GPU
 
-# vnmd/deepretinotopy_1.0.19 currently fails to build via Singularity/Apptainer
-# in unprivileged mode (corrupted/broken layer upstream on Docker Hub as of
-# 2026-07-24: extraction fails unpacking a hardlinked file from a conda
-# package). 1.0.18 is confirmed working, so it's the default here; override
-# via config.json's "container_version" (or CONTAINER_VERSION env var) once
-# 1.0.19 is fixed upstream, or to pin a different release.
+# vnmd/deepretinotopy_1.0.19 fails to build via older packaged Singularity/
+# Apptainer installs (confirmed broken on singularity-ce 4.1.1, in both
+# rootless and --fakeroot mode: extraction fails unpacking a hardlinked file
+# from a conda package). Confirmed working with a current Apptainer (1.5.3)
+# and via plain `docker run`, so this is a Singularity/Apptainer version
+# issue, not a broken image. 1.0.18 is the default here for compatibility
+# across execution environments with an unknown Singularity/Apptainer
+# version; override via config.json's "container_version" (or
+# CONTAINER_VERSION env var) if your environment has a recent enough
+# Apptainer/SingularityCE for 1.0.19.
 CONFIG_CONTAINER_VERSION=$(jq -r '.container_version // empty' "${CONFIG}")
 CONTAINER_VERSION="${CONFIG_CONTAINER_VERSION:-${CONTAINER_VERSION:-1.0.18}}"
 

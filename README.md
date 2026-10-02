@@ -1,3 +1,5 @@
+[![Abcdspec-compliant](https://img.shields.io/badge/ABCD_Spec-v1.1-green.svg)](https://github.com/brain-life/abcd-spec)
+
 # deepRetinotopy
 
 `app-deepretinotopy`
@@ -64,7 +66,7 @@ The app runs the full deepRetinotopy pipeline on a single subject:
 | `use_gpu`     | bool   | Pass `--nv` to Singularity for GPU inference (default: `false`)              |
 | `container_version` | string | `vnmd/deepretinotopy_<version>` tag to pull (default: `1.0.18`)       |
 
-**Note on `container_version`:** `1.0.19` currently fails to build via Singularity/Apptainer in unprivileged mode -- extraction breaks unpacking a hardlinked file from a conda package (`brotlicffi`), reproducible even with a fresh `TMPDIR`/`CACHEDIR`, and looks like a corrupted/broken layer for that specific tag on Docker Hub rather than a host issue. `1.0.18` is confirmed working and is the default here; bump `container_version` once `1.0.19` is fixed upstream.
+**Note on `container_version`:** `1.0.19` fails to build via Singularity/Apptainer on older packaged installs (confirmed broken on `singularity-ce 4.1.1`, Ubuntu Noble's packaged build) -- extraction breaks unpacking a hardlinked file from a conda package (`brotlicffi`), in both rootless and `--fakeroot` mode, even with a fresh `TMPDIR`/`CACHEDIR`. This is a bug in the older Singularity/Apptainer OCI-to-SIF conversion path, not a broken image: `docker pull`/`docker run` of `1.0.19` works fine, and so does `singularity exec`/`apptainer exec` with a current Apptainer (confirmed working on Apptainer `1.5.3`). `1.0.18` is the default here for maximum compatibility across execution environments with an unknown Singularity/Apptainer version; set `container_version` to `1.0.19` explicitly if your environment has a reasonably recent Apptainer/SingularityCE.
 
 Minimal expected FreeSurfer input:
 
