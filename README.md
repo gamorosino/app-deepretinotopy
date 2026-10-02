@@ -1,4 +1,5 @@
 [![Abcdspec-compliant](https://img.shields.io/badge/ABCD_Spec-v1.1-green.svg)](https://github.com/brain-life/abcd-spec)
+[![Run on Brainlife.io](https://img.shields.io/badge/Brainlife-brainlife.app.6ac02d2c931afedae84f7da2-blue.svg)](https://brainlife.io/app/6ac02d2c931afedae84f7da2)
 
 # deepRetinotopy
 

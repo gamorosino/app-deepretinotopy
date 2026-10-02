@@ -1,0 +1,75 @@
+{
+  "name": "DeepRetinotopy",
+  "github": "gamorosino/app-deepretinotopy",
+  "github_branch": "main",
+  "config": {
+    "freesurfer": { "type": "input", "file_id": "output", "input_id": "freesurfer" },
+    "maps": {
+      "id": "maps",
+      "type": "string",
+      "placeholder": "polarAngle,eccentricity,pRFsize",
+      "advanced": false,
+      "desc": "Comma-separated maps to predict: polarAngle, eccentricity, pRFsize",
+      "default": "polarAngle,eccentricity,pRFsize"
+    },
+    "dataset": {
+      "id": "dataset",
+      "type": "string",
+      "placeholder": "brainlife",
+      "advanced": true,
+      "desc": "Dataset label passed to the deepRetinotopy toolbox",
+      "default": "brainlife"
+    },
+    "subject_id": {
+      "id": "subject_id",
+      "type": "string",
+      "placeholder": "subject",
+      "advanced": true,
+      "desc": "Internal subject id used when staging the FreeSurfer input",
+      "default": "subject"
+    },
+    "fast": {
+      "id": "fast",
+      "type": "string",
+      "placeholder": "yes",
+      "advanced": true,
+      "desc": "Fast midthickness generation: yes or no",
+      "default": "yes"
+    },
+    "use_gpu": {
+      "id": "use_gpu",
+      "type": "boolean",
+      "placeholder": "",
+      "advanced": true,
+      "desc": "Pass --nv to Singularity for GPU-accelerated inference",
+      "default": false
+    },
+    "container_version": {
+      "id": "container_version",
+      "type": "string",
+      "placeholder": "1.0.18",
+      "advanced": true,
+      "desc": "vnmd/deepretinotopy container tag to pull (default: 1.0.18; use 1.0.19 if your resource has Apptainer >= 1.5.3)",
+      "default": "1.0.18"
+    }
+  },
+  "inputs": [
+    {
+      "id": "freesurfer",
+      "datatype": "neuro/freesurfer",
+      "datatype_tags": [],
+      "optional": false,
+      "multi": false,
+      "advanced": false
+    }
+  ],
+  "outputs": [
+    {
+      "id": "prf_surfaces",
+      "desc": "Native-space surface pRF maps (polar angle, eccentricity, pRF size) as .func.gii files",
+      "datatype": "neuro/prf",
+      "datatype_tags": ["deepretinotopy"],
+      "archive": true
+    }
+  ]
+}
