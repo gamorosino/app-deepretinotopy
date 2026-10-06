@@ -89,7 +89,7 @@ FAST=$(jq -r '.fast // "yes"' "${CONFIG}")
 DATASET=$(jq -r '.dataset // "brainlife"' "${CONFIG}")
 SUBJECT_ID=$(jq -r '.subject_id // "subject"' "${CONFIG}")
 USE_GPU=$(jq -r 'if .use_gpu then "1" else "0" end' "${CONFIG}")
-POLAR_ANGLE_BENSON=$(jq -r 'if .polar_angle_benson then "true" else "false" end' "${CONFIG}")
+POLAR_ANGLE_BENSON=$(jq -r 'if (.polar_angle_benson == false) then "false" else "true" end' "${CONFIG}")
 export USE_GPU
 
 # vnmd/deepretinotopy_1.0.19 fails to build via older packaged Singularity/

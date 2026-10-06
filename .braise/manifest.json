@@ -58,7 +58,7 @@
       "placeholder": "",
       "advanced": false,
       "desc": "Fold polar angle from 0-360° to 0-180° (Benson/neuropythy convention; hemisphere encodes left vs right visual field)",
-      "default": false
+      "default": true
     }
   },
   "inputs": [
