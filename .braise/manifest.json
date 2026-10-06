@@ -65,8 +65,8 @@
   ],
   "outputs": [
     {
-      "id": "prf_surfaces",
-      "desc": "Native-space surface pRF maps (polar angle, eccentricity, pRF size) as .func.gii files",
+      "id": "prf",
+      "desc": "neuro/prf dataset: NIfTI volumes at root, GIFTI overlays in prf_surfaces/, VTK meshes in surfaces/",
       "datatype": "neuro/prf",
       "datatype_tags": ["deepretinotopy"],
       "archive": true
