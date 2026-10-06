@@ -2,6 +2,9 @@ config.json
 output/
 work/
 prf_surfaces/
+surfaces/
+fs_overlays/
+*.nii.gz
 product.json
 *.log
 __pycache__/
