@@ -89,6 +89,7 @@ FAST=$(jq -r '.fast // "yes"' "${CONFIG}")
 DATASET=$(jq -r '.dataset // "brainlife"' "${CONFIG}")
 SUBJECT_ID=$(jq -r '.subject_id // "subject"' "${CONFIG}")
 USE_GPU=$(jq -r 'if .use_gpu then "1" else "0" end' "${CONFIG}")
+POLAR_ANGLE_BENSON=$(jq -r 'if .polar_angle_benson then "true" else "false" end' "${CONFIG}")
 export USE_GPU
 
 # vnmd/deepretinotopy_1.0.19 fails to build via older packaged Singularity/
@@ -179,6 +180,23 @@ for hemi in ('lh', 'rh'):
     except Exception as e:
         print(f'r2 GIFTI failed for {hemi}: {e}', file=sys.stderr)
 PYEOF
+
+if [[ "${POLAR_ANGLE_BENSON}" == "true" ]]; then
+  echo "Folding polar angle to 0-180° (Benson convention) ..."
+  run_in_env python3 - <<'PYEOF'
+import nibabel as nib, numpy as np, os
+for hemi in ('lh', 'rh'):
+    for m in ('polarAngle', 'inferred_polarAngle'):
+        gp = f'prf/prf_surfaces/{hemi}.{m}.gii'
+        if not os.path.isfile(gp):
+            continue
+        img = nib.load(gp)
+        data = img.darrays[0].data.copy().astype(np.float32)
+        data = np.where(data > 180, 360.0 - data, data)
+        img.darrays[0].data = data
+        nib.save(img, gp)
+PYEOF
+fi
 
 echo "Writing FreeSurfer overlay format to prf/fs_overlays/ ..."
 run_in_env python3 - <<'PYEOF'

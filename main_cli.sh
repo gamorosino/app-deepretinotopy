@@ -42,6 +42,8 @@ Keys (see README.md for details):
   --use_gpu        pass --nv to singularity (requires a GPU-enabled host)
   --container_version  vnmd/deepretinotopy_<version> tag to pull (default: 1.0.18;
                         1.0.19 currently fails to build via Singularity)
+  --polar_angle_benson  fold polar angle from 0-360° to 0-180° (Benson/neuropythy
+                        convention; hemisphere encodes left vs right visual field)
 
 Options:
   --config PATH     write generated config to PATH instead of ./config.json

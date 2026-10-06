@@ -51,6 +51,14 @@
       "advanced": true,
       "desc": "vnmd/deepretinotopy container tag to pull (default: 1.0.18; use 1.0.19 if your resource has Apptainer >= 1.5.3)",
       "default": "1.0.18"
+    },
+    "polar_angle_benson": {
+      "id": "polar_angle_benson",
+      "type": "boolean",
+      "placeholder": "",
+      "advanced": false,
+      "desc": "Fold polar angle from 0-360° to 0-180° (Benson/neuropythy convention; hemisphere encodes left vs right visual field)",
+      "default": false
     }
   },
   "inputs": [
