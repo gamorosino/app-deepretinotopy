@@ -58,7 +58,7 @@
       "placeholder": "",
       "advanced": true,
       "desc": "Use NaN-aware barycentric interpolation for surface-to-volume projection (non-finite vertices get zero weight; disable if results look worse than standard prism projection)",
-      "default": true
+      "default": false
     },
     "polar_angle_benson": {
       "id": "polar_angle_benson",
