@@ -19,6 +19,12 @@ Wraps the [deepRetinotopy_TheToolbox](https://github.com/felenitaribeiro/deepRet
 
 ---
 
+# Contributors
+
+**Junbeom Kwon** ([junebeomstics@utexas.edu](mailto:junebeomstics@utexas.edu))
+
+---
+
 # Citation
 
 If you use this app in your research, please cite:
