@@ -205,14 +205,26 @@ for hemi in lh rh; do
   done
 done
 
-echo "Projecting surface maps to volume (prism model, brain.mgz space) ..."
+echo "Projecting surface maps to volume (prism model, NaN-aware, brain.mgz space) ..."
 BRAIN_MGZ="${MRI_DIR}/brain.mgz"
 if [[ -f "${BRAIN_MGZ}" ]]; then
-  run_in_env python3 "${SCRIPT_DIR}/utils/prism_surface_to_volume.py" \
-    --freesurfer-subject-dir "${SUBJECTS_DIR}/${SUBJECT_ID}" \
-    --prf-surface-dir "$(pwd)/prf_surfaces" \
-    --output-dir "$(pwd)" \
-    --metrics polarAngle eccentricity rfWidth varea r2
+  # metric:method — linear for continuous maps, nearest for label/mask maps
+  for metric_method in "polarAngle:linear" "eccentricity:linear" "rfWidth:linear" "varea:nearest" "r2:nearest"; do
+    metric="${metric_method%%:*}"
+    method="${metric_method##*:}"
+    lh_gii="$(pwd)/prf_surfaces/lh.${metric}.gii"
+    rh_gii="$(pwd)/prf_surfaces/rh.${metric}.gii"
+    lh_arg=(); rh_arg=()
+    [[ -f "${lh_gii}" ]] && lh_arg=(--lh-metric "${lh_gii}")
+    [[ -f "${rh_gii}" ]] && rh_arg=(--rh-metric "${rh_gii}")
+    if [[ ${#lh_arg[@]} -gt 0 || ${#rh_arg[@]} -gt 0 ]]; then
+      run_in_env python3 "${SCRIPT_DIR}/utils/prism_surface_to_volume_nanaware.py" \
+        --freesurfer-subject-dir "${SUBJECTS_DIR}/${SUBJECT_ID}" \
+        "${lh_arg[@]}" "${rh_arg[@]}" \
+        --output-volume "$(pwd)/${metric}.nii.gz" \
+        --method "${method}"
+    fi
+  done
 else
   echo "WARNING: brain.mgz not found at ${BRAIN_MGZ}, skipping volume projection"
 fi
