@@ -9,7 +9,7 @@ TEMPLATES_DIR="${SCRIPT_DIR}/templates"
 
 # Brainlife apps generally run from the repo root.
 # Inputs are mounted under ./input and outputs go to ./output.
-mkdir -p output work
+mkdir -p output work/subjects
 
 # Singularity here only shares a limited default set of host paths (e.g.
 # $HOME) with the container -- anything on a separately-mounted filesystem
@@ -143,7 +143,7 @@ SURF_DIR="${FSDIR}/surf"
 MRI_DIR="${FSDIR}/mri"
 DEEPRET_OUT="output/${SUBJECT_ID}/deepRetinotopy"
 
-mkdir -p prf_surfaces surfaces work/hemi_vols
+mkdir -p prf_surfaces surfaces
 
 echo "Renaming predicted GIFTI maps to brainlife prf naming ..."
 if [[ -d "${DEEPRET_OUT}" ]]; then
@@ -205,38 +205,16 @@ for hemi in lh rh; do
   done
 done
 
-echo "Projecting surface maps to volume (native T1 space) ..."
-TEMPLATE="${MRI_DIR}/orig.mgz"
-[[ ! -f "${TEMPLATE}" ]] && TEMPLATE="${MRI_DIR}/T1.mgz"
-if [[ -f "${TEMPLATE}" ]]; then
-  for map in polarAngle eccentricity rfWidth varea; do
-    for hemi in lh rh; do
-      overlay="prf_surfaces/${hemi}.${map}"
-      if [[ -f "${overlay}" ]]; then
-        run_in_env mri_surf2vol \
-          --surfval "${overlay}" \
-          --hemi "${hemi}" \
-          --subject "${SUBJECT_ID}" \
-          --subjects_dir "${SUBJECTS_DIR}" \
-          --template "${TEMPLATE}" \
-          --out "work/hemi_vols/${hemi}.${map}.nii.gz" || true
-      fi
-    done
-    run_in_env python3 - <<PYEOF || true
-import nibabel as nib, numpy as np, os
-lp = 'work/hemi_vols/lh.${map}.nii.gz'
-rp = 'work/hemi_vols/rh.${map}.nii.gz'
-lh = nib.load(lp) if os.path.isfile(lp) else None
-rh = nib.load(rp) if os.path.isfile(rp) else None
-ref = lh or rh
-if ref is None:
-    exit(0)
-data = (lh.get_fdata() if lh else 0) + (rh.get_fdata() if rh else 0)
-nib.save(nib.Nifti1Image(data.astype(np.float32), ref.affine, ref.header), '${map}.nii.gz')
-PYEOF
-  done
-  [[ -f "varea.nii.gz" ]] && \
-    run_in_env mri_binarize --i varea.nii.gz --min 1 --max 100 --o r2.nii.gz || true
+echo "Projecting surface maps to volume (prism model, brain.mgz space) ..."
+BRAIN_MGZ="${MRI_DIR}/brain.mgz"
+if [[ -f "${BRAIN_MGZ}" ]]; then
+  run_in_env python3 "${SCRIPT_DIR}/utils/prism_surface_to_volume.py" \
+    --freesurfer-subject-dir "${SUBJECTS_DIR}/${SUBJECT_ID}" \
+    --prf-surface-dir "$(pwd)/prf_surfaces" \
+    --output-dir "$(pwd)" \
+    --metrics polarAngle eccentricity rfWidth varea r2
+else
+  echo "WARNING: brain.mgz not found at ${BRAIN_MGZ}, skipping volume projection"
 fi
 
 # ---------------------------------------------------------------------------
