@@ -131,22 +131,106 @@ echo
 run_in_env "${CMD[@]}"
 
 # ---------------------------------------------------------------------------
-# Flatten native-space predictions into a prf_surfaces/ folder with naming
-# consistent with this ecosystem's other retinotopy apps (rfWidth instead of
-# pRFsize), for easy reuse by downstream apps such as
-# app-retinotopic-connectivity.
+# Post-processing: reshape deepRetinotopy output to match neuro/prf datatype
+#
+# neuro/prf expects:
+#   {eccentricity,polarAngle,rfWidth,r2,varea}.nii.gz  (volume, native T1 space)
+#   prf_surfaces/{lh,rh}.{eccentricity,polarAngle,rfWidth,r2,varea}     (FS overlay)
+#   prf_surfaces/{lh,rh}.{eccentricity,polarAngle,rfWidth,r2,varea}.gii (GIFTI)
+#   surfaces/{lh,rh}.{white,pial,inflated,sphere}.vtk
 # ---------------------------------------------------------------------------
-mkdir -p prf_surfaces
+SURF_DIR="${FSDIR}/surf"
+MRI_DIR="${FSDIR}/mri"
 DEEPRET_OUT="output/${SUBJECT_ID}/deepRetinotopy"
+
+mkdir -p prf_surfaces surfaces work/hemi_vols
+
+echo "Renaming predicted GIFTI maps to brainlife prf naming ..."
 if [[ -d "${DEEPRET_OUT}" ]]; then
-  for hemisphere in lh rh; do
+  for hemi in lh rh; do
     for pair in "polarAngle:polarAngle" "eccentricity:eccentricity" "pRFsize:rfWidth"; do
       src_map="${pair%%:*}"
       dst_map="${pair##*:}"
-      src="${DEEPRET_OUT}/${SUBJECT_ID}.predicted_${src_map}_model.${hemisphere}.native.func.gii"
-      [[ -f "${src}" ]] && cp "${src}" "prf_surfaces/${hemisphere}.${dst_map}.native.func.gii"
+      src="${DEEPRET_OUT}/${SUBJECT_ID}.predicted_${src_map}_model.${hemi}.native.func.gii"
+      [[ -f "${src}" ]] && cp "${src}" "prf_surfaces/${hemi}.${dst_map}.gii"
     done
+    roi="${DEEPRET_OUT}/${SUBJECT_ID}.ROI.${hemi}.native.label.gii"
+    [[ -f "${roi}" ]] && cp "${roi}" "prf_surfaces/${hemi}.varea.gii"
   done
+fi
+
+echo "Creating r2 GIFTIs (binary mask: 1 where varea > 0) ..."
+run_in_env python3 - <<'PYEOF'
+import nibabel as nib, numpy as np, os, sys
+for hemi in ('lh', 'rh'):
+    vp = f'prf_surfaces/{hemi}.varea.gii'
+    rp = f'prf_surfaces/{hemi}.r2.gii'
+    if not os.path.isfile(vp):
+        continue
+    try:
+        data = (nib.load(vp).darrays[0].data > 0).astype(np.float32)
+        nib.save(nib.gifti.GiftiImage(darrays=[nib.gifti.GiftiDataArray(data)]), rp)
+    except Exception as e:
+        print(f'r2 GIFTI failed for {hemi}: {e}', file=sys.stderr)
+PYEOF
+
+echo "Converting GIFTIs to FreeSurfer overlay format ..."
+run_in_env python3 - <<'PYEOF'
+import nibabel as nib, nibabel.freesurfer.io as fsio, numpy as np, os, sys
+for hemi in ('lh', 'rh'):
+    for m in ('polarAngle', 'eccentricity', 'rfWidth', 'varea', 'r2'):
+        gp = f'prf_surfaces/{hemi}.{m}.gii'
+        op = f'prf_surfaces/{hemi}.{m}'
+        if not os.path.isfile(gp):
+            continue
+        try:
+            data = nib.load(gp).darrays[0].data.astype(np.float32)
+            fsio.write_morph_data(op, data)
+        except Exception as e:
+            print(f'FS overlay failed {gp}: {e}', file=sys.stderr)
+PYEOF
+
+echo "Creating VTK surface files ..."
+for hemi in lh rh; do
+  for surf in white pial inflated sphere; do
+    src="${SURF_DIR}/${hemi}.${surf}"
+    [[ -f "${src}" ]] && \
+      run_in_env mris_convert --to-scanner "${src}" "surfaces/${hemi}.${surf}.vtk" || true
+  done
+done
+
+echo "Projecting surface maps to volume (native T1 space) ..."
+TEMPLATE="${MRI_DIR}/orig.mgz"
+[[ ! -f "${TEMPLATE}" ]] && TEMPLATE="${MRI_DIR}/T1.mgz"
+if [[ -f "${TEMPLATE}" ]]; then
+  for map in polarAngle eccentricity rfWidth varea; do
+    for hemi in lh rh; do
+      overlay="prf_surfaces/${hemi}.${map}"
+      if [[ -f "${overlay}" ]]; then
+        run_in_env mri_surf2vol \
+          --surfval "${overlay}" \
+          --hemi "${hemi}" \
+          --subject "${SUBJECT_ID}" \
+          --subjects_dir "${SUBJECTS_DIR}" \
+          --template "${TEMPLATE}" \
+          --out "work/hemi_vols/${hemi}.${map}.nii.gz" || true
+      fi
+    done
+    run_in_env python3 - <<PYEOF || true
+import nibabel as nib, numpy as np, os
+lp = 'work/hemi_vols/lh.${map}.nii.gz'
+rp = 'work/hemi_vols/rh.${map}.nii.gz'
+lh = nib.load(lp) if os.path.isfile(lp) else None
+rh = nib.load(rp) if os.path.isfile(rp) else None
+ref = lh or rh
+if ref is None:
+    exit(0)
+data = (lh.get_fdata() if lh else 0) + (rh.get_fdata() if rh else 0)
+nib.save(nib.Nifti1Image(data.astype(np.float32), ref.affine, ref.header), '${map}.nii.gz')
+PYEOF
+  done
+  [[ -f "varea.nii.gz" ]] && \
+    run_in_env mri_binarize --i varea.nii.gz --min 1 --max 100 --o r2.nii.gz || true
 fi
 
 # ---------------------------------------------------------------------------
