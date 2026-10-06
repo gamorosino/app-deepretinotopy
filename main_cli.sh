@@ -44,6 +44,8 @@ Keys (see README.md for details):
                         1.0.19 currently fails to build via Singularity)
   --polar_angle_benson  fold polar angle from 0-360° to 0-180° (Benson/neuropythy
                         convention; hemisphere encodes left vs right visual field)
+  --nan_aware_projection  use NaN-aware barycentric interpolation for surf-to-vol
+                          (default: true; set false to use standard prism projection)
 
 Options:
   --config PATH     write generated config to PATH instead of ./config.json

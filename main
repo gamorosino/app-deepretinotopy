@@ -90,6 +90,7 @@ DATASET=$(jq -r '.dataset // "brainlife"' "${CONFIG}")
 SUBJECT_ID=$(jq -r '.subject_id // "subject"' "${CONFIG}")
 USE_GPU=$(jq -r 'if .use_gpu then "1" else "0" end' "${CONFIG}")
 POLAR_ANGLE_BENSON=$(jq -r 'if (.polar_angle_benson == false) then "false" else "true" end' "${CONFIG}")
+NAN_AWARE=$(jq -r 'if (.nan_aware_projection == false) then "false" else "true" end' "${CONFIG}")
 export USE_GPU
 
 # vnmd/deepretinotopy_1.0.19 fails to build via older packaged Singularity/
@@ -223,26 +224,35 @@ for hemi in lh rh; do
   done
 done
 
-echo "Projecting surface maps to volume (prism model, NaN-aware, brain.mgz space) ..."
+echo "Projecting surface maps to volume (prism model, brain.mgz space, nan_aware=${NAN_AWARE}) ..."
 BRAIN_MGZ="${MRI_DIR}/brain.mgz"
 if [[ -f "${BRAIN_MGZ}" ]]; then
-  # metric:method — linear for continuous maps, nearest for label/mask maps
-  for metric_method in "polarAngle:linear" "eccentricity:linear" "rfWidth:linear" "varea:nearest" "r2:nearest"; do
-    metric="${metric_method%%:*}"
-    method="${metric_method##*:}"
-    lh_gii="$(pwd)/prf/prf_surfaces/lh.${metric}.gii"
-    rh_gii="$(pwd)/prf/prf_surfaces/rh.${metric}.gii"
-    lh_arg=(); rh_arg=()
-    [[ -f "${lh_gii}" ]] && lh_arg=(--lh-metric "${lh_gii}")
-    [[ -f "${rh_gii}" ]] && rh_arg=(--rh-metric "${rh_gii}")
-    if [[ ${#lh_arg[@]} -gt 0 || ${#rh_arg[@]} -gt 0 ]]; then
-      run_in_env python3 "${SCRIPT_DIR}/utils/prism_surface_to_volume_nanaware.py" \
-        --freesurfer-subject-dir "${SUBJECTS_DIR}/${SUBJECT_ID}" \
-        "${lh_arg[@]}" "${rh_arg[@]}" \
-        --output-volume "$(pwd)/prf/${metric}.nii.gz" \
-        --method "${method}"
-    fi
-  done
+  if [[ "${NAN_AWARE}" == "true" ]]; then
+    # NaN-aware: non-finite vertices get zero weight + renormalization
+    for metric_method in "polarAngle:linear" "eccentricity:linear" "rfWidth:linear" "varea:nearest" "r2:nearest"; do
+      metric="${metric_method%%:*}"
+      method="${metric_method##*:}"
+      lh_gii="$(pwd)/prf/prf_surfaces/lh.${metric}.gii"
+      rh_gii="$(pwd)/prf/prf_surfaces/rh.${metric}.gii"
+      lh_arg=(); rh_arg=()
+      [[ -f "${lh_gii}" ]] && lh_arg=(--lh-metric "${lh_gii}")
+      [[ -f "${rh_gii}" ]] && rh_arg=(--rh-metric "${rh_gii}")
+      if [[ ${#lh_arg[@]} -gt 0 || ${#rh_arg[@]} -gt 0 ]]; then
+        run_in_env python3 "${SCRIPT_DIR}/utils/prism_surface_to_volume_nanaware.py" \
+          --freesurfer-subject-dir "${SUBJECTS_DIR}/${SUBJECT_ID}" \
+          "${lh_arg[@]}" "${rh_arg[@]}" \
+          --output-volume "$(pwd)/prf/${metric}.nii.gz" \
+          --method "${method}"
+      fi
+    done
+  else
+    # Standard prism projection (original behaviour)
+    run_in_env python3 "${SCRIPT_DIR}/utils/prism_surface_to_volume.py" \
+      --freesurfer-subject-dir "${SUBJECTS_DIR}/${SUBJECT_ID}" \
+      --prf-surface-dir "$(pwd)/prf/prf_surfaces" \
+      --output-dir "$(pwd)/prf" \
+      --metrics polarAngle eccentricity rfWidth varea r2
+  fi
 else
   echo "WARNING: brain.mgz not found at ${BRAIN_MGZ}, skipping volume projection"
 fi
