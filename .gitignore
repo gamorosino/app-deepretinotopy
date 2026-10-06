@@ -1,9 +1,7 @@
 config.json
 output/
 work/
-prf_surfaces/
-surfaces/
-fs_overlays/
+prf/
 *.nii.gz
 product.json
 *.log

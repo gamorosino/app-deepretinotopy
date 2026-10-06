@@ -143,7 +143,7 @@ SURF_DIR="${FSDIR}/surf"
 MRI_DIR="${FSDIR}/mri"
 DEEPRET_OUT="output/${SUBJECT_ID}/deepRetinotopy"
 
-mkdir -p prf_surfaces surfaces
+mkdir -p prf/prf_surfaces prf/surfaces prf/fs_overlays
 
 echo "Renaming predicted GIFTI maps to brainlife prf naming ..."
 if [[ -d "${DEEPRET_OUT}" ]]; then
@@ -152,15 +152,15 @@ if [[ -d "${DEEPRET_OUT}" ]]; then
       src_map="${pair%%:*}"
       dst_map="${pair##*:}"
       src="${DEEPRET_OUT}/${SUBJECT_ID}.predicted_${src_map}_model.${hemi}.native.func.gii"
-      [[ -f "${src}" ]] && cp "${src}" "prf_surfaces/${hemi}.${dst_map}.gii"
+      [[ -f "${src}" ]] && cp "${src}" "prf/prf_surfaces/${hemi}.${dst_map}.gii"
     done
     roi="${DEEPRET_OUT}/${SUBJECT_ID}.ROI.${hemi}.native.label.gii"
-    [[ -f "${roi}" ]] && cp "${roi}" "prf_surfaces/${hemi}.varea.gii"
+    [[ -f "${roi}" ]] && cp "${roi}" "prf/prf_surfaces/${hemi}.varea.gii"
     for pair in "polarAngle:inferred_polarAngle" "eccentricity:inferred_eccentricity"; do
       src_map="${pair%%:*}"
       dst_map="${pair##*:}"
       src="${DEEPRET_OUT}/${SUBJECT_ID}.fs_predicted_${src_map}_${hemi}_curvatureFeat_model.func.gii"
-      [[ -f "${src}" ]] && cp "${src}" "prf_surfaces/${hemi}.${dst_map}.gii"
+      [[ -f "${src}" ]] && cp "${src}" "prf/prf_surfaces/${hemi}.${dst_map}.gii"
     done
   done
 fi
@@ -169,8 +169,8 @@ echo "Creating r2 GIFTIs (binary mask: 1 where varea > 0) ..."
 run_in_env python3 - <<'PYEOF'
 import nibabel as nib, numpy as np, os, sys
 for hemi in ('lh', 'rh'):
-    vp = f'prf_surfaces/{hemi}.varea.gii'
-    rp = f'prf_surfaces/{hemi}.r2.gii'
+    vp = f'prf/prf_surfaces/{hemi}.varea.gii'
+    rp = f'prf/prf_surfaces/{hemi}.r2.gii'
     if not os.path.isfile(vp):
         continue
     try:
@@ -180,14 +180,13 @@ for hemi in ('lh', 'rh'):
         print(f'r2 GIFTI failed for {hemi}: {e}', file=sys.stderr)
 PYEOF
 
-echo "Writing FreeSurfer overlay format to fs_overlays/ ..."
-mkdir -p fs_overlays
+echo "Writing FreeSurfer overlay format to prf/fs_overlays/ ..."
 run_in_env python3 - <<'PYEOF'
 import nibabel as nib, nibabel.freesurfer.io as fsio, numpy as np, os, sys
 for hemi in ('lh', 'rh'):
     for m in ('polarAngle', 'eccentricity', 'rfWidth', 'varea', 'r2'):
-        gp = f'prf_surfaces/{hemi}.{m}.gii'
-        op = f'fs_overlays/{hemi}.{m}'
+        gp = f'prf/prf_surfaces/{hemi}.{m}.gii'
+        op = f'prf/fs_overlays/{hemi}.{m}'
         if not os.path.isfile(gp):
             continue
         try:
@@ -202,7 +201,7 @@ for hemi in lh rh; do
   for surf in white pial inflated sphere; do
     src="${SURF_DIR}/${hemi}.${surf}"
     [[ -f "${src}" ]] && \
-      run_in_env mris_convert --to-scanner "${src}" "surfaces/${hemi}.${surf}.vtk" || true
+      run_in_env mris_convert --to-scanner "${src}" "prf/surfaces/${hemi}.${surf}.vtk" || true
   done
 done
 
@@ -213,8 +212,8 @@ if [[ -f "${BRAIN_MGZ}" ]]; then
   for metric_method in "polarAngle:linear" "eccentricity:linear" "rfWidth:linear" "varea:nearest" "r2:nearest"; do
     metric="${metric_method%%:*}"
     method="${metric_method##*:}"
-    lh_gii="$(pwd)/prf_surfaces/lh.${metric}.gii"
-    rh_gii="$(pwd)/prf_surfaces/rh.${metric}.gii"
+    lh_gii="$(pwd)/prf/prf_surfaces/lh.${metric}.gii"
+    rh_gii="$(pwd)/prf/prf_surfaces/rh.${metric}.gii"
     lh_arg=(); rh_arg=()
     [[ -f "${lh_gii}" ]] && lh_arg=(--lh-metric "${lh_gii}")
     [[ -f "${rh_gii}" ]] && rh_arg=(--rh-metric "${rh_gii}")
@@ -222,7 +221,7 @@ if [[ -f "${BRAIN_MGZ}" ]]; then
       run_in_env python3 "${SCRIPT_DIR}/utils/prism_surface_to_volume_nanaware.py" \
         --freesurfer-subject-dir "${SUBJECTS_DIR}/${SUBJECT_ID}" \
         "${lh_arg[@]}" "${rh_arg[@]}" \
-        --output-volume "$(pwd)/${metric}.nii.gz" \
+        --output-volume "$(pwd)/prf/${metric}.nii.gz" \
         --method "${method}"
     fi
   done
@@ -238,4 +237,4 @@ jq -n --arg dataset "${DATASET}" --arg maps "${MAPS}" \
   '{"brainlife": [{"type": "info", "msg": ("deepRetinotopy predicted maps: " + $maps + " (dataset: " + $dataset + ")")}]}' \
   > product.json
 
-echo "Done. Outputs in ./output and ./prf_surfaces"
+echo "Done. Outputs in ./prf"
