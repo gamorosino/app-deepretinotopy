@@ -156,6 +156,12 @@ if [[ -d "${DEEPRET_OUT}" ]]; then
     done
     roi="${DEEPRET_OUT}/${SUBJECT_ID}.ROI.${hemi}.native.label.gii"
     [[ -f "${roi}" ]] && cp "${roi}" "prf_surfaces/${hemi}.varea.gii"
+    for pair in "polarAngle:inferred_polarAngle" "eccentricity:inferred_eccentricity"; do
+      src_map="${pair%%:*}"
+      dst_map="${pair##*:}"
+      src="${DEEPRET_OUT}/${SUBJECT_ID}.fs_predicted_${src_map}_${hemi}_curvatureFeat_model.func.gii"
+      [[ -f "${src}" ]] && cp "${src}" "prf_surfaces/${hemi}.${dst_map}.gii"
+    done
   done
 fi
 
