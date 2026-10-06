@@ -96,22 +96,38 @@ The HCP `fs_LR-deformed_to-fsaverage` template surfaces required by the toolbox 
 
 # Output
 
+The app produces a `neuro/prf`-compliant dataset. All paths are relative to the working directory.
+
 ```
-output/
-└── subject/
-    ├── surf/               # midthickness + curvature (32k fs_LR)
-    └── deepRetinotopy/      # fs_predicted_* (32k fs_LR) and *.native.func.gii maps
+eccentricity.nii.gz       # eccentricity map in native T1 space (brain.mgz grid)
+polarAngle.nii.gz         # polar angle map
+rfWidth.nii.gz            # pRF size map (deepRetinotopy "pRFsize")
+varea.nii.gz              # visual area parcellation (ROI label, nearest-neighbour projection)
+r2.nii.gz                 # binary cortical mask (1 where varea > 0)
 prf_surfaces/
-├── lh.polarAngle.native.func.gii
-├── rh.polarAngle.native.func.gii
-├── lh.eccentricity.native.func.gii
-├── rh.eccentricity.native.func.gii
-├── lh.rfWidth.native.func.gii
-└── rh.rfWidth.native.func.gii
-product.json
+├── lh.polarAngle.gii             # native-space polar angle, left hemisphere
+├── lh.eccentricity.gii           # native-space eccentricity, left hemisphere
+├── lh.rfWidth.gii                # native-space pRF size, left hemisphere
+├── lh.varea.gii                  # visual area labels, left hemisphere
+├── lh.r2.gii                     # cortical mask, left hemisphere
+├── lh.inferred_polarAngle.gii    # 32k fs_LR inferred polar angle resampled to native
+├── lh.inferred_eccentricity.gii  # 32k fs_LR inferred eccentricity resampled to native
+└── rh.*                          # same set for right hemisphere
+surfaces/
+├── lh.white.vtk                  # native white-matter surface
+├── lh.pial.vtk                   # native pial surface
+├── lh.inflated.vtk               # inflated surface
+├── lh.sphere.vtk                 # spherical surface
+└── rh.*                          # same set for right hemisphere
+fs_overlays/
+├── lh.polarAngle                 # FreeSurfer binary morph overlay (same data as .gii)
+└── rh.*                          # (not part of neuro/prf; for use with FreeSurfer tools)
+output/                           # raw deepRetinotopy toolbox outputs (intermediate)
 ```
 
-`prf_surfaces/` flattens the native-space predictions with naming consistent with this ecosystem's other retinotopy apps (`rfWidth` = pRF size), so they can be consumed directly by downstream apps such as `app-retinotopic-connectivity`. Note deepRetinotopy does not produce a visual-area (`varea`) parcellation.
+**Volume projection** (`*.nii.gz`): performed with a prism-based surface-to-volume model that decomposes each white–pial face pair into tetrahedra and fills every cortical ribbon voxel via barycentric interpolation. Non-finite vertex values are handled with NaN-aware weight renormalization (a voxel is set to 0/NaN only when all three prism vertices are non-finite), matching neuropythy's `cortex_to_image(method='linear')` behavior. Continuous maps use linear interpolation; label/mask maps (`varea`, `r2`) use nearest-neighbour.
+
+**Surface maps** (`prf_surfaces/`): native-space GIFTIs with naming consistent with the brainlife.io retinotopy ecosystem (`rfWidth` = pRF size). Compatible with downstream apps such as `app-retinotopic-connectivity`.
 
 ---
 
