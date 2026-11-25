@@ -3,6 +3,55 @@
 
 # deepRetinotopy
 
+<!-- brainlife-app:begin (generated from the App manifest; edit the manifest, not this block) -->
+
+> **DeepRetinotopy brainlife.io app: predict retinotopic maps from cortical anatomy using geometric deep learning. Based on the original deepRetinotopy model by Fernanda L. Ribeiro et al. (2021, 2024, 2025).**
+
+Wraps deepRetinotopy_TheToolbox (Neurodesk vnmd/deepretinotopy container): builds midthickness surfaces and curvature from the native FreeSurfer white/pial surfaces, resamples them to the HCP 32k fs_LR mesh, predicts polar angle, eccentricity and pRF size with a pretrained geometric deep learning model, and maps the predictions back to native surfaces and the T1 volume, with a visual-area parcellation. Use it to estimate retinotopic maps when no retinotopic mapping scan is available. Needs only lh/rh white, pial and sphere.reg surfaces; no FreeSurfer license is required.
+
+| | |
+|---|---|
+| 📥 **Inputs** | `neuro/freesurfer` |
+| 📤 **Outputs** | `neuro/prf` |
+| 🐳 **Container** | `vnmd/deepretinotopy_1.0.18` |
+| 🔗 **Run it** | [doi.org/10.25663/brainlife.app.983](https://doi.org/10.25663/brainlife.app.983) |
+
+#### 📥 Inputs
+
+| Input | Datatype | Required | Description |
+|---|---|---|---|
+| `freesurfer` | `neuro/freesurfer` | yes | A single subject's FreeSurfer output directory. surf/ must contain lh/rh white, pial and sphere.reg. |
+
+#### 📤 Outputs
+
+| Output | Datatype | Description |
+|---|---|---|
+| `prf` | `neuro/prf` | Predicted polar angle, eccentricity and pRF size (rfWidth) maps with a visual-area parcellation and cortical mask, as T1-space volumes and native-surface GIFTIs (prf_surfaces/), plus surface meshes. |
+
+<details>
+<summary><b>⚙️ Parameters</b> (8)</summary>
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `maps` | string | `polarAngle,eccentricity,pRFsize` | Comma-separated maps to predict: polarAngle, eccentricity, pRFsize |
+| `dataset` | string | `brainlife` | Dataset label passed to the deepRetinotopy toolbox |
+| `subject_id` | string | `subject` | Internal subject id used when staging the FreeSurfer input |
+| `fast` | string | `yes` | Fast midthickness generation: yes or no |
+| `use_gpu` | boolean | `false` | Pass --nv to Singularity for GPU-accelerated inference |
+| `container_version` | string | `1.0.18` | vnmd/deepretinotopy container tag to pull (default: 1.0.18; use 1.0.19 if your resource has Apptainer >= 1.5.3) |
+| `polar_angle_benson` | boolean | `true` | Fold polar angle from 0-360° to 0-180° (Benson/neuropythy convention; hemisphere encodes left vs right visual field) |
+| `nan_aware_projection` | boolean | `false` | Use NaN-aware barycentric interpolation for surface-to-volume projection (non-finite vertices get zero weight; disable if results look worse than standard prism projection) |
+
+</details>
+
+📚 **References used by this App:**
+- Ribeiro FL, Bollmann S, Puckett AM. Predicting the retinotopic organization of human visual cortex from anatomy using geometric deep learning. NeuroImage 118624 (2021). [doi:10.1016/j.neuroimage.2021.118624](https://doi.org/10.1016/j.neuroimage.2021.118624)
+- Ribeiro FL, et al. Predicting functional topography of the human visual cortex from cortical anatomy at scale. bioRxiv (2025). [doi:10.1101/2025.11.27.690210](https://doi.org/10.1101/2025.11.27.690210)
+- Renton AI, et al. Neurodesk: an accessible, flexible and portable data analysis environment for reproducible neuroimaging. Nat Methods 21(5):804-808 (2024). [doi:10.1038/s41592-023-02145-x](https://doi.org/10.1038/s41592-023-02145-x)
+- Hayashi S, et al. brainlife.io: a decentralized platform for reproducible neuroscience. Nat Methods (2024). [doi:10.1038/s41592-024-02237-2](https://doi.org/10.1038/s41592-024-02237-2)
+
+<!-- brainlife-app:end -->
+
 `app-deepretinotopy`
 
 This app predicts retinotopic maps (polar angle, eccentricity, and population receptive field size) directly from an individual's cortical anatomy, using the geometric deep learning model from [deepRetinotopy_TheToolbox](https://github.com/felenitaribeiro/deepRetinotopy_TheToolbox).
